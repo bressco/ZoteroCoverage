@@ -79,9 +79,13 @@ fn main() -> io::Result<()> {
 
     let differences = get_citation_difference(citations_document, citations_bibliography).unwrap();
 
-    println!("{} Sources not cited:", differences.len());
-    for d in differences {
-        println!("{d}");
+    if differences.len() == 0 {
+        println!("All sources cited");
+    } else {
+        println!("{} Sources not cited:", differences.len());
+        for d in differences {
+            println!("{d}");
+        }
     }
 
     Ok(())
@@ -90,7 +94,7 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        get_citation_difference, get_citations_bibliography, get_citations_document, Citations,
+        Citations, get_citation_difference, get_citations_bibliography, get_citations_document,
     };
 
     #[test]
