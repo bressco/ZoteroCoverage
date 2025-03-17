@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Cache
-    - uses: action/cache@v4
+      uses: action/cache@v4
       with:
         path: |
           ~/.cargo/registry
