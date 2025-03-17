@@ -17,13 +17,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Cache
-      uses: action/cache@v4
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry
           ~/.cargo/git
           target
-          key: ${{ runner.so }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.so }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
       run: cargo build --verbose
     - name: Run tests
