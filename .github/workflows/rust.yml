@@ -46,7 +46,7 @@ jobs:
       run: cargo build --release
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ZoteroCoverage
         path: target/release/ZoteroCoverage
