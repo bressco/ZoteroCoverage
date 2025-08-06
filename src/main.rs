@@ -5,24 +5,34 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::fmt;
 use std::io;
+use std::fs;
 use std::io::Read;
+use yaml_front_matter::{YamlFrontMatter, Document};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    //path to zotero_lib, JSON format
-    #[clap(short, long)]
-    zotero_lib: Input,
-
     //path to document, md format (or any plain text format)
     #[clap(short, long)]
     document: Input,
+
+    //path to zotero_lib, JSON format; optional
+    #[clap(short, long)]
+    zotero_lib: Option<Input>,
+
 }
 
 #[derive(Deserialize, Debug, Clone, Hash, PartialEq)]
 struct Citations {
     #[serde(rename = "citation-key")]
     pub citation_key: String,
+}
+
+// Get Metadata from markdown document for Library
+// Bibliography field contains path
+#[derive(Deserialize)]
+struct Metadata {
+    bibliography: String
 }
 
 impl fmt::Display for Citations {
@@ -63,16 +73,47 @@ fn get_citation_difference(
     Ok(difference)
 }
 
+fn get_bibliography_path(document: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Extract the path of the bibliography given in the yaml header of the passed md file
+    let metadata= YamlFrontMatter::parse::<Metadata>(&document)
+        .unwrap()
+        .metadata;
+    Ok(metadata.bibliography)
+}
+
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    let mut bibliography_json_input = args.zotero_lib.lock();
-    let mut document_md_input = args.document.lock();
 
-    let mut bibliography_json: String = String::new();
+    // TODO: Handle relative paths
+
+    // Read in the provided md document
+    let mut document_md_input = args.document.lock();
     let mut document_md: String = String::new();
 
-    bibliography_json_input.read_to_string(&mut bibliography_json)?;
+    // Read the document into a string
     document_md_input.read_to_string(&mut document_md)?;
+
+    // let mut bibliography_json_input;
+
+    let mut bibliography_json: String = String::new();
+    // Get bibliography either from CLI oder from header in document
+    match args.zotero_lib {
+        Some(ref zotero_lib) => {
+            // If found, read in the json based on the CLI
+            let bibliography_json_input = args.zotero_lib;
+            bibliography_json_input.unwrap().read_to_string(&mut bibliography_json)?;
+        }
+        None => {
+            // Get bibliography path as input
+
+            // YAML does not accept tabs, but two or four spaces instead
+            let clean_doc = &document_md.replace("\t", "  ");
+            let bibliography_path = get_bibliography_path(&clean_doc).unwrap();
+            // read from path
+            println!("Trying to open {bibliography_path}");
+            bibliography_json = fs::read_to_string(bibliography_path)?
+        }
+    }
 
     let citations_bibliography = get_citations_bibliography(&bibliography_json).unwrap();
     let citations_document = get_citations_document(&document_md).unwrap();
