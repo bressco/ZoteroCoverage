@@ -84,8 +84,6 @@ fn get_bibliography_path(document: &str) -> Result<String, Box<dyn std::error::E
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
-    // TODO: Handle relative paths
-
     // Read in the provided md document
     let mut document_md_input = args.document.lock();
     let mut document_md: String = String::new();
@@ -108,10 +106,12 @@ fn main() -> io::Result<()> {
 
             // YAML does not accept tabs, but two or four spaces instead
             let clean_doc = &document_md.replace("\t", "  ");
+            // Let's leave this a bit cursed
             let bibliography_path = get_bibliography_path(&clean_doc).unwrap();
+            let bp = shellexpand::tilde(&bibliography_path);
             // read from path
             println!("Trying to open {bibliography_path}");
-            bibliography_json = fs::read_to_string(bibliography_path)?
+            bibliography_json = fs::read_to_string(bp.into_owned())?
         }
     }
 
