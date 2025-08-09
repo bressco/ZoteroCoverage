@@ -7,7 +7,7 @@ use std::fmt;
 use std::io;
 use std::fs;
 use std::io::Read;
-use yaml_front_matter::{YamlFrontMatter, Document};
+use yaml_front_matter::{YamlFrontMatter};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -19,6 +19,9 @@ struct Args {
     //path to zotero_lib, JSON format; optional
     #[clap(short, long)]
     zotero_lib: Option<Input>,
+
+    #[clap(short, long)]
+    verbose: bool,
 
 }
 
@@ -89,15 +92,27 @@ fn main() -> io::Result<()> {
     let mut document_md: String = String::new();
 
     // Read the document into a string
+    if args.verbose {
+        println!("Reading document from {}", document_md_input.path()
+            .unwrap()
+            .display()
+        );
+    }
     document_md_input.read_to_string(&mut document_md)?;
-
-    // let mut bibliography_json_input;
 
     let mut bibliography_json: String = String::new();
     // Get bibliography either from CLI oder from header in document
     match args.zotero_lib {
         Some(ref zotero_lib) => {
             // If found, read in the json based on the CLI
+
+            if args.verbose {
+                println!("Reading bibliography from {}", zotero_lib.path()
+                    .unwrap()
+                    .display()
+                );
+            }
+
             let bibliography_json_input = args.zotero_lib;
             bibliography_json_input.unwrap().read_to_string(&mut bibliography_json)?;
         }
@@ -110,22 +125,43 @@ fn main() -> io::Result<()> {
             let bibliography_path = get_bibliography_path(&clean_doc).unwrap();
             let bp = shellexpand::tilde(&bibliography_path);
             // read from path
-            println!("Trying to open {bibliography_path}");
+
+            if args.verbose {
+                println!("Reading bibliography from path in document, {}", bp.as_ref())
+            }
+
             bibliography_json = fs::read_to_string(bp.into_owned())?
         }
     }
 
-    let citations_bibliography = get_citations_bibliography(&bibliography_json).unwrap();
-    let citations_document = get_citations_document(&document_md).unwrap();
+    let citations_bibliography = get_citations_bibliography(&bibliography_json)
+        .unwrap();
 
-    let differences = get_citation_difference(citations_document, citations_bibliography).unwrap();
+    if args.verbose {
+        println!("Found {} sources in bibliography", citations_bibliography.len());
+    }
 
-    if differences.len() == 0 {
+    let citations_document = get_citations_document(&document_md)
+        .unwrap();
+
+    if args.verbose {
+        println!("Found {} citations in document", citations_document.len());
+    }
+
+    if args.verbose {
+        println!("Comparing sources in bibliography and cited sources");
+    }
+
+    let differences = get_citation_difference(citations_document,
+                                              citations_bibliography).unwrap();
+
+
+    if differences.is_empty() {
         println!("All sources cited");
     } else {
         println!("{} Sources not cited:", differences.len());
         for d in differences {
-            println!("{d}");
+            println!("{}", d);
         }
     }
 
@@ -135,7 +171,7 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Citations, get_citation_difference, get_citations_bibliography, get_citations_document,
+        Citations, get_citation_difference, get_citations_bibliography, get_citations_document, get_bibliography_path,
     };
 
     #[test]
@@ -471,5 +507,23 @@ Fall sein, zumindest, was den Zugang zu den Daten betrifft. @Alexander.2024; @Al
         let result = get_citation_difference(document_citations, json_citations).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].citation_key, "key1");
+    }
+    #[test]
+    fn test_get_bibliography_path() {
+        let header = r#"---
+        bibliography: a/b/c
+        ---
+        "#;
+        assert_eq!(get_bibliography_path(header).unwrap(), "a/b/c");
+    }
+
+    #[test]
+    fn test_get_bibliography_path_tab() {
+        let header = r#"---
+        foo:
+        \tbar: baz
+        bibliography: a/b/c
+        "#;
+        assert_eq!(get_bibliography_path(header).unwrap(), "a/b/c");
     }
 }
