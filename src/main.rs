@@ -20,6 +20,7 @@ struct Args {
     #[clap(short, long)]
     zotero_lib: Option<Input>,
 
+    //enable verbose output
     #[clap(short, long)]
     verbose: bool,
 
