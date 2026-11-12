@@ -174,6 +174,8 @@ fn main() -> anyhow::Result<()> {
         for d in differences {
             println!("{}", d);
         }
+        // Fail on command line
+        std::process::exit(1);
     }
 
     Ok(())
