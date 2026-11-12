@@ -4,10 +4,10 @@ use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fmt;
-use std::io;
 use std::fs;
+use std::io;
 use std::io::Read;
-use yaml_front_matter::{YamlFrontMatter};
+use yaml_front_matter::YamlFrontMatter;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -23,7 +23,6 @@ struct Args {
     //enable verbose output
     #[clap(short, long)]
     verbose: bool,
-
 }
 
 #[derive(Deserialize, Debug, Clone, Hash, PartialEq)]
@@ -36,7 +35,7 @@ struct Citations {
 // Bibliography field contains path
 #[derive(Deserialize)]
 struct Metadata {
-    bibliography: String
+    bibliography: String,
 }
 
 impl fmt::Display for Citations {
@@ -79,7 +78,7 @@ fn get_citation_difference(
 
 fn get_bibliography_path(document: &str) -> Result<String, Box<dyn std::error::Error>> {
     // Extract the path of the bibliography given in the yaml header of the passed md file
-    let metadata= YamlFrontMatter::parse::<Metadata>(&document)
+    let metadata = YamlFrontMatter::parse::<Metadata>(&document)
         .unwrap()
         .metadata;
     Ok(metadata.bibliography)
@@ -94,9 +93,9 @@ fn main() -> io::Result<()> {
 
     // Read the document into a string
     if args.verbose {
-        println!("Reading document from {}", document_md_input.path()
-            .unwrap()
-            .display()
+        println!(
+            "Reading document from {}",
+            document_md_input.path().unwrap().display()
         );
     }
     document_md_input.read_to_string(&mut document_md)?;
@@ -108,54 +107,66 @@ fn main() -> io::Result<()> {
             // If found, read in the json based on the CLI
 
             if args.verbose {
-                println!("Reading bibliography from {}", zotero_lib.path()
-                    .unwrap()
-                    .display()
+                println!(
+                    "Reading bibliography from {}",
+                    zotero_lib.path().unwrap().display()
                 );
             }
 
             let bibliography_json_input = args.zotero_lib;
-            bibliography_json_input.unwrap().read_to_string(&mut bibliography_json)?;
+            bibliography_json_input
+                .unwrap()
+                .read_to_string(&mut bibliography_json)?;
         }
         None => {
-            // Get bibliography path as input
+            // Get bibliography path as input if none was passed on CLI
 
-            // YAML does not accept tabs, but two or four spaces instead
+            // YAML does not accept tabs, but two or four spaces instead. Thus, convert
+            // tabs to spaces
             let clean_doc = &document_md.replace("\t", "  ");
+
             // Let's leave this a bit cursed
             let bibliography_path = get_bibliography_path(&clean_doc).unwrap();
             let bp = shellexpand::tilde(&bibliography_path);
-            // read from path
 
+            // read from path
             if args.verbose {
-                println!("Reading bibliography from path in document, {}", bp.as_ref())
+                println!(
+                    "Reading bibliography from path in document, {}",
+                    bp.as_ref()
+                )
             }
 
             bibliography_json = fs::read_to_string(bp.into_owned())?
         }
     }
 
-    let citations_bibliography = get_citations_bibliography(&bibliography_json)
-        .unwrap();
+    let citations_bibliography = get_citations_bibliography(&bibliography_json).unwrap();
 
     if args.verbose {
-        println!("Found {} sources in bibliography", citations_bibliography.len());
+        println!(
+            "Found {} sources in bibliography",
+            citations_bibliography.len()
+        );
     }
 
-    let citations_document = get_citations_document(&document_md)
-        .unwrap();
+    let citations_document = get_citations_document(&document_md).unwrap();
 
     if args.verbose {
-        println!("Found {} citations in document", citations_document.len());
+        println!(
+            "Found {} citations in document",
+            citations_document.len()
+        );
     }
 
     if args.verbose {
         println!("Comparing sources in bibliography and cited sources");
     }
 
-    let differences = get_citation_difference(citations_document,
-                                              citations_bibliography).unwrap();
-
+    let differences = get_citation_difference(
+        citations_document,
+        citations_bibliography
+    ).unwrap();
 
     if differences.is_empty() {
         println!("All sources cited");
@@ -172,7 +183,8 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Citations, get_citation_difference, get_citations_bibliography, get_citations_document, get_bibliography_path,
+        Citations, get_bibliography_path, get_citation_difference, get_citations_bibliography,
+        get_citations_document,
     };
 
     #[test]
