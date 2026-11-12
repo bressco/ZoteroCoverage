@@ -5,7 +5,6 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
-use std::io;
 use std::io::Read;
 use yaml_front_matter::YamlFrontMatter;
 
@@ -46,13 +45,13 @@ impl fmt::Display for Citations {
 
 fn get_citations_bibliography(
     bibliography: &str,
-) -> Result<Vec<Citations>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Vec<Citations>> {
     let v: Vec<Citations> = serde_json::from_str(bibliography)?;
     Ok(v)
 }
 
-fn get_citations_document(document: &str) -> Result<Vec<&str>, Box<dyn std::error::Error>> {
-    let re = Regex::new(r"@(?<key>\w+\.\d{4}\w?)").unwrap();
+fn get_citations_document(document: &str) -> anyhow::Result<Vec<&str>> {
+    let re = Regex::new(r"@(?<key>\w+\.\d{4}\w?)")?;
     let md_citations: Vec<&str> = re
         .captures_iter(document)
         .map(|caps| caps.name("key").unwrap().as_str())
@@ -64,7 +63,7 @@ fn get_citations_document(document: &str) -> Result<Vec<&str>, Box<dyn std::erro
 fn get_citation_difference(
     document: Vec<&str>,
     json: Vec<Citations>,
-) -> Result<Vec<Citations>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Vec<Citations>> {
     let document_set: HashSet<&str> = HashSet::from_iter(document);
 
     let difference: Vec<_> = json
@@ -76,15 +75,15 @@ fn get_citation_difference(
     Ok(difference)
 }
 
-fn get_bibliography_path(document: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn get_bibliography_path(document: &str) -> anyhow::Result<String> {
     // Extract the path of the bibliography given in the yaml header of the passed md file
-    let metadata = YamlFrontMatter::parse::<Metadata>(&document)
+    let metadata = YamlFrontMatter::parse::<Metadata>(document)
         .unwrap()
         .metadata;
     Ok(metadata.bibliography)
 }
 
-fn main() -> io::Result<()> {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Read in the provided md document
@@ -126,7 +125,7 @@ fn main() -> io::Result<()> {
             let clean_doc = &document_md.replace("\t", "  ");
 
             // Let's leave this a bit cursed
-            let bibliography_path = get_bibliography_path(&clean_doc).unwrap();
+            let bibliography_path = get_bibliography_path(clean_doc)?;
             let bp = shellexpand::tilde(&bibliography_path);
 
             // read from path
@@ -141,7 +140,7 @@ fn main() -> io::Result<()> {
         }
     }
 
-    let citations_bibliography = get_citations_bibliography(&bibliography_json).unwrap();
+    let citations_bibliography = get_citations_bibliography(&bibliography_json)?;
 
     if args.verbose {
         println!(
@@ -150,7 +149,7 @@ fn main() -> io::Result<()> {
         );
     }
 
-    let citations_document = get_citations_document(&document_md).unwrap();
+    let citations_document = get_citations_document(&document_md)?;
 
     if args.verbose {
         println!(
@@ -166,7 +165,7 @@ fn main() -> io::Result<()> {
     let differences = get_citation_difference(
         citations_document,
         citations_bibliography
-    ).unwrap();
+    )?;
 
     if differences.is_empty() {
         println!("All sources cited");
