@@ -1,6 +1,6 @@
 # Make sure RUST_VERSION matches the Rust version
 ARG RUST_VERSION=1.93.1
-ARG APP_NAME=matrix-status-bot
+ARG APP_NAME=ZoteroCoverage
 
 ################################################################################
 # Create a stage for building the application.
