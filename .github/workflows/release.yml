@@ -71,8 +71,16 @@ jobs:
           cd release
           sha256sum *.tar.gz > SHA256SUMS.txt
 
+      - name: Get current date
+        id: date
+        run: echo "DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
+      - name: Get commit stub
+        id: stub
+        run: echo "STUB=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: release/*
           generate_release_notes: true
+          tag_name: "v${{ env.DATE }}-${{ env.STUB }}"
