@@ -13,6 +13,8 @@ use yaml_front_matter::YamlFrontMatter;
 enum OutputFormat {
     Json,
     Text,
+    /// Pull request comment (Markdown with detection marker `<!-- zoterocoverage -->`)
+    Pr,
 }
 
 #[derive(Parser, Debug)]
@@ -30,7 +32,7 @@ struct Args {
     #[clap(short, long)]
     verbose: bool,
 
-    //output format: json or text (default: text)
+    //output format: json, text or pr (default: text)
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Text)]
     format: OutputFormat,
 }
@@ -62,6 +64,28 @@ struct Report {
     all_cited: bool
 }
 
+fn format_pr_comment(report: &Report) -> String {
+    let mut out = String::from("<!-- zoterocoverage -->\n");
+    out.push_str(&format!(
+        "## {} ZoteroCoverage: ",
+        if report.all_cited { "Pass" } else { "Fail" }
+    ));
+    if report.all_cited {
+        out.push_str(&format!("All {} sources cited\n", report.total_bibliography));
+    } else {
+        out.push_str(&format!(
+            "{} of {} sources not cited\n\n",
+            report.uncited.len(),
+            report.total_bibliography
+        ));
+        out.push_str("The following sources in the bibliography are not cited in the document:\n");
+        for d in &report.uncited {
+            out.push_str(&format!("- `@{}`\n", d));
+        }
+    }
+    out
+}
+
 fn format_output(report: &Report, format: &OutputFormat) -> anyhow::Result<String> {
     match format {
         OutputFormat::Json => Ok(serde_json::to_string_pretty(report)?),
@@ -76,6 +100,7 @@ fn format_output(report: &Report, format: &OutputFormat) -> anyhow::Result<Strin
                 Ok(out)
             }
         }
+        OutputFormat::Pr => Ok(format_pr_comment(report)),
     }
 }
 
@@ -204,12 +229,17 @@ fn main() -> anyhow::Result<()> {
         citations_bibliography.clone()
     )?;
 
-    let report = Report {
+    let mut report = Report {
         all_cited: differences.is_empty(),
         uncited: differences,
         total_bibliography: citations_bibliography.len(),
         total_citations: citations_document.len(),
     };
+
+    // Deterministic order for stable output (e.g. PR comments)
+    report
+        .uncited
+        .sort_by(|a, b| a.citation_key.cmp(&b.citation_key));
 
     println!("{}", format_output(&report, &output_format)?);
     if !report.all_cited {
@@ -223,8 +253,8 @@ fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Citations, get_bibliography_path, get_citation_difference, get_citations_bibliography,
-        get_citations_document,
+        Citations, OutputFormat, Report, format_output, get_bibliography_path,
+        get_citation_difference, get_citations_bibliography, get_citations_document,
     };
 
     #[test]
@@ -568,6 +598,44 @@ Fall sein, zumindest, was den Zugang zu den Daten betrifft. @Alexander.2024; @Al
         ---
         "#;
         assert_eq!(get_bibliography_path(header).unwrap(), "a/b/c");
+    }
+
+    #[test]
+    fn test_format_pr_comment_uncited() {
+        let report = Report {
+            all_cited: false,
+            uncited: vec![
+                Citations {
+                    citation_key: "Bomhard.2024b".to_string(),
+                },
+                Citations {
+                    citation_key: "Alexander.2024".to_string(),
+                },
+            ],
+            total_bibliography: 5,
+            total_citations: 3,
+        };
+        let out = format_output(&report, &OutputFormat::Pr).unwrap();
+        let expected = "<!-- zoterocoverage -->\n\
+                        ## ❌ ZoteroCoverage: 2 of 5 sources not cited\n\n\
+                        The following sources in the bibliography are not cited in the document:\n\
+                        - `@Bomhard.2024b`\n\
+                        - `@Alexander.2024`\n";
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_format_pr_comment_all_cited() {
+        let report = Report {
+            all_cited: true,
+            uncited: vec![],
+            total_bibliography: 5,
+            total_citations: 5,
+        };
+        let out = format_output(&report, &OutputFormat::Pr).unwrap();
+        let expected = "<!-- zoterocoverage -->\n\
+                        ## ✅ ZoteroCoverage: All 5 sources cited\n";
+        assert_eq!(out, expected);
     }
 
     #[test]
