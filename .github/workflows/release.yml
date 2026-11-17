@@ -1,13 +1,13 @@
 name: Build and publish Linux binaries
 
 # Publishes a GitHub Release with natively compiled binaries for
-# linux/amd64 and linux/arm64. Runs on every pushed tag; tags are
-# created automatically on merge to main by the "Create and publish a
-# Docker image" workflow.
+# linux/amd64 and linux/arm64.
 on:
   push:
-    tags:
-      - '**'
+    branches: main
+  pull_request:
+    types: closed
+    branches: main
 
 env:
   CARGO_TERM_COLOR: always
