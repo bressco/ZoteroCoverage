@@ -68,7 +68,7 @@ fn format_pr_comment(report: &Report) -> String {
     let mut out = String::from("<!-- zoterocoverage -->\n");
     out.push_str(&format!(
         "## {} ZoteroCoverage: ",
-        if report.all_cited { "Pass" } else { "Fail" }
+        if report.all_cited { "[Pass]" } else { "[Fail]" }
     ));
     if report.all_cited {
         out.push_str(&format!("All {} sources cited\n", report.total_bibliography));
@@ -144,10 +144,7 @@ fn get_bibliography_path(document: &str) -> anyhow::Result<String> {
     Ok(metadata.bibliography)
 }
 
-fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
-    let output_format = args.format;
-
+fn run(args: &Args) -> anyhow::Result<Report> {
     // Read in the provided md document
     let mut document_md_input = args.document.lock();
     let mut document_md: String = String::new();
@@ -174,7 +171,7 @@ fn main() -> anyhow::Result<()> {
                 );
             }
 
-            let bibliography_json_input = args.zotero_lib;
+            let bibliography_json_input = args.zotero_lib.clone();
             bibliography_json_input
                 .unwrap()
                 .read_to_string(&mut bibliography_json)?;
@@ -241,13 +238,38 @@ fn main() -> anyhow::Result<()> {
         .uncited
         .sort_by(|a, b| a.citation_key.cmp(&b.citation_key));
 
-    println!("{}", format_output(&report, &output_format)?);
+    Ok(report)
+}
+
+fn main() {
+    let args = Args::parse();
+    let output_format = args.format;
+
+    // Exit codes:
+    //   0 - every source in the bibliography is cited
+    //   1 - sources are not cited (results are printed first)
+    //   2 - runtime error
+    let report = match run(&args) {
+        Ok(report) => report,
+        Err(err) => {
+            eprintln!("error: {err:#}");
+            std::process::exit(2);
+        }
+    };
+
+    let output = match format_output(&report, &output_format) {
+        Ok(output) => output,
+        Err(err) => {
+            eprintln!("error: {err:#}");
+            std::process::exit(2);
+        }
+    };
+
+    println!("{output}");
     if !report.all_cited {
         // Fail on command line
         std::process::exit(1);
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -617,7 +639,7 @@ Fall sein, zumindest, was den Zugang zu den Daten betrifft. @Alexander.2024; @Al
         };
         let out = format_output(&report, &OutputFormat::Pr).unwrap();
         let expected = "<!-- zoterocoverage -->\n\
-                        ## ❌ ZoteroCoverage: 2 of 5 sources not cited\n\n\
+                        ## [Fail] ZoteroCoverage: 2 of 5 sources not cited\n\n\
                         The following sources in the bibliography are not cited in the document:\n\
                         - `@Bomhard.2024b`\n\
                         - `@Alexander.2024`\n";
@@ -634,7 +656,7 @@ Fall sein, zumindest, was den Zugang zu den Daten betrifft. @Alexander.2024; @Al
         };
         let out = format_output(&report, &OutputFormat::Pr).unwrap();
         let expected = "<!-- zoterocoverage -->\n\
-                        ## ✅ ZoteroCoverage: All 5 sources cited\n";
+                        ## [Pass] ZoteroCoverage: All 5 sources cited\n";
         assert_eq!(out, expected);
     }
 
