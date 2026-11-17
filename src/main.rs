@@ -1,16 +1,18 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use clap_file::Input;
 use regex::Regex;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io::Read;
 use yaml_front_matter::YamlFrontMatter;
 
+#[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
+#[value(rename_all = "lower")]
 enum OutputFormat {
     Json,
-    Text
+    Text,
 }
 
 #[derive(Parser, Debug)]
@@ -27,9 +29,13 @@ struct Args {
     //enable verbose output
     #[clap(short, long)]
     verbose: bool,
+
+    //output format: json or text (default: text)
+    #[arg(short, long, value_enum, default_value_t = OutputFormat::Text)]
+    format: OutputFormat,
 }
 
-#[derive(Deserialize, Debug, Clone, Hash, PartialEq)]
+#[derive(Deserialize, Debug, Clone, Hash, PartialEq, Serialize)]
 struct Citations {
     #[serde(rename = "citation-key")]
     pub citation_key: String,
@@ -48,11 +54,29 @@ impl fmt::Display for Citations {
     }
 }
 
+#[derive(Serialize)]
 struct Report {
     uncited: Vec<Citations>,
     total_bibliography: usize,
     total_citations: usize,
     all_cited: bool
+}
+
+fn format_output(report: &Report, format: &OutputFormat) -> anyhow::Result<String> {
+    match format {
+        OutputFormat::Json => Ok(serde_json::to_string_pretty(report)?),
+        OutputFormat::Text => {
+            if report.all_cited {
+                Ok("All sources cited".to_string())
+            } else {
+                let mut out = format!("{} Sources not cited:", report.uncited.len());
+                for d in &report.uncited {
+                    out.push_str(&format!("\n{}", d));
+                }
+                Ok(out)
+            }
+        }
+    }
 }
 
 fn get_citations_bibliography(
@@ -97,6 +121,7 @@ fn get_bibliography_path(document: &str) -> anyhow::Result<String> {
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    let output_format = args.format;
 
     // Read in the provided md document
     let mut document_md_input = args.document.lock();
@@ -186,13 +211,8 @@ fn main() -> anyhow::Result<()> {
         total_citations: citations_document.len(),
     };
 
-    if report.all_cited {
-        println!("All sources cited");
-    } else {
-        println!("{} Sources not cited:", report.uncited.len());
-        for d in report.uncited {
-            println!("{}", d);
-        }
+    println!("{}", format_output(&report, &output_format)?);
+    if !report.all_cited {
         // Fail on command line
         std::process::exit(1);
     }
