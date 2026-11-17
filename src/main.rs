@@ -8,6 +8,11 @@ use std::fs;
 use std::io::Read;
 use yaml_front_matter::YamlFrontMatter;
 
+enum OutputFormat {
+    Json,
+    Text
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -41,6 +46,13 @@ impl fmt::Display for Citations {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.citation_key)
     }
+}
+
+struct Report {
+    uncited: Vec<Citations>,
+    total_bibliography: usize,
+    total_citations: usize,
+    all_cited: bool
 }
 
 fn get_citations_bibliography(
@@ -163,15 +175,22 @@ fn main() -> anyhow::Result<()> {
     }
 
     let differences = get_citation_difference(
-        citations_document,
-        citations_bibliography
+        citations_document.to_vec(),
+        citations_bibliography.clone()
     )?;
 
-    if differences.is_empty() {
+    let report = Report {
+        all_cited: differences.is_empty(),
+        uncited: differences,
+        total_bibliography: citations_bibliography.len(),
+        total_citations: citations_document.len(),
+    };
+
+    if report.all_cited {
         println!("All sources cited");
     } else {
-        println!("{} Sources not cited:", differences.len());
-        for d in differences {
+        println!("{} Sources not cited:", report.uncited.len());
+        for d in report.uncited {
             println!("{}", d);
         }
         // Fail on command line
