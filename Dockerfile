@@ -45,4 +45,4 @@ USER appuser
 COPY --from=build /bin/server /bin/
 
 # What the container should run when it is started.
-CMD ["/bin/server"]
+ENTRYPOINT ["/bin/server"]
