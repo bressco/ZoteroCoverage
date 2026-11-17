@@ -1,10 +1,12 @@
-#
 name: Create and publish a Docker image
 
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
   push:
     branches: [ 'main' ]
+  pull_request:
+    types: closed
+    branches: main
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -15,6 +17,7 @@ env:
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
       contents: read
@@ -32,6 +35,18 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get current date 
+        id: date 
+        run: echo "DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
+      - name: Get commit stub 
+        id: stub 
+        run: echo "STUB=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      - name: Push tag 
+        id: tag_version 
+        uses: mathieudutour/github-tag-action@v6.2
+        with: 
+          github_token: ${{secrets.GITHUB_TOKEN}}
+          custom_tag: "${{env.DATE}}-${{env.STUB}}"
       # This step uses [docker/metadata-action](https://github.com/docker/metadata-action#about) to extract tags and labels that will be applied to the specified image. The `id` "meta" allows the output of this step to be referenced in a subsequent step. The `images` value provides the base name for the tags and labels.
       - name: Extract metadata (tags, labels) for Docker
         id: meta
