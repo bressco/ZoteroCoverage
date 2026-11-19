@@ -1,86 +1,132 @@
-name: Build and publish Linux binaries
+name: Tag, build, and publish
 
-# Publishes a GitHub Release with natively compiled binaries for
-# linux/amd64 and linux/arm64.
 on:
   push:
-    branches: main
+    branches: [main]
   pull_request:
-    types: closed
-    branches: main
+    types: [closed]
+    branches: [main]
 
-env:
-  CARGO_TERM_COLOR: always
+concurrency:
+  group: release-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ghcr.io/${{ github.repository }}
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build linux/${{ matrix.arch }}
-    runs-on: ${{ matrix.platform }}
+  create-tag:
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Push version tag
+        id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          custom_tag: "$(date +%Y-%m-%d)-${GITHUB_SHA:0:7}"
+
+  binaries:
+    needs: create-tag
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            platform: ubuntu-latest
-            arch: amd64
-          - target: aarch64-unknown-linux-gnu
-            platform: ubuntu-24.04-arm # GitHub-hosted arm64 runner
-            arch: arm64
+          - { target: x86_64-unknown-linux-gnu,  runner: ubuntu-latest,      arch: amd64 }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm,   arch: arm64 }
+    runs-on: ${{ matrix.runner }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build release binary
-        run: cargo build --locked --profile release-lto --target ${{ matrix.target }}
-
-      - name: Package binary
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --profile release-lto --target ${{ matrix.target }}
+      - name: Package
         run: |
-          cp "target/${{ matrix.target }}/release-lto/ZoteroCoverage" ZoteroCoverage
-          tar -czf "ZoteroCoverage-linux-${{ matrix.arch }}.tar.gz" ZoteroCoverage
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          cp target/${{ matrix.target }}/release-lto/ZoteroCoverage ZoteroCoverage
+          tar -czf ZoteroCoverage-linux-${{ matrix.arch }}.tar.gz ZoteroCoverage
+      - uses: actions/upload-artifact@v4
         with:
           name: ZoteroCoverage-linux-${{ matrix.arch }}
           path: ZoteroCoverage-linux-${{ matrix.arch }}.tar.gz
 
-  release:
-    name: Publish release
-    runs-on: ubuntu-latest
-    needs: build
+  docker:
+    needs: create-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, platform: linux/amd64, runner: ubuntu-latest    }
+          - { arch: arm64, platform: linux/arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
     steps:
-      - name: Download binaries
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push platform image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ${{ env.IMAGE }}:tmp-${{ matrix.arch }}
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+
+  publish-image:
+    needs: [create-tag, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Merge manifests into multi-arch image
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.IMAGE }}:latest \
+            -t ${{ env.IMAGE }}:${{ needs.create-tag.outputs.tag }} \
+            ${{ env.IMAGE }}:tmp-amd64 ${{ env.IMAGE }}:tmp-arm64
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: $(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' ${{ env.IMAGE }}:latest)
+          push-to-registry: true
+
+  release:
+    needs: [create-tag, binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
         with:
           path: release/
           merge-multiple: true
-
-      - name: Generate SHA-256 checksums
-        run: |
-          cd release
-          sha256sum *.tar.gz > SHA256SUMS.txt
-
-      - name: Get current date
-        id: date
-        run: echo "DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-      - name: Get commit stub
-        id: stub
-        run: echo "STUB=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
+      - name: Checksums
+        run: cd release && sha256sum *.tar.gz > SHA256SUMS.txt
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.create-tag.outputs.tag }}
           files: release/*
           generate_release_notes: true
-          tag_name: "v${{ env.DATE }}-${{ env.STUB }}"
