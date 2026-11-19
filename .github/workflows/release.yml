@@ -125,7 +125,7 @@ jobs:
       - name: Checksums
         run: cd release && sha256sum *.tar.gz > SHA256SUMS.txt
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.create-tag.outputs.tag }}
           files: release/*
