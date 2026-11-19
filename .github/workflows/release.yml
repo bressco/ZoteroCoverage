@@ -89,7 +89,7 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ env.IMAGE }}:tmp-${{ matrix.arch }}
+          tags: ${{ needs.create-tag.outputs.tag }}:tmp-${{ matrix.arch }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
@@ -112,7 +112,7 @@ jobs:
           docker buildx imagetools create \
             -t ${{ env.IMAGE }}:latest \
             -t ${{ env.IMAGE }}:${{ needs.create-tag.outputs.tag }} \
-            ${{ env.IMAGE }}:tmp-amd64 ${{ env.IMAGE }}:tmp-arm64
+            ${{ needs.create-tag.outputs.tag }}:tmp-amd64 ${{ needs.create-tag.outputs.tag }}:tmp-arm64
       - name: Generate artifact attestation
         uses: actions/attest@v4
         with:
