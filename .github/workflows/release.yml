@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.new_tag }}
+      image: ${{ steps.tag.outputs.image }}
     steps:
       - uses: actions/checkout@v7
       - name: Get current date
@@ -40,6 +41,9 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: "${{ env.DATE }}-${{ env.STUB }}"
+      - name: create lowercase image name
+        id: image
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
   binaries:
     needs: create-tag
@@ -89,7 +93,7 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: ${{ needs.create-tag.outputs.tag }}:tmp-${{ matrix.arch }}
+          tags: ${{ needs.create-tag.outputs.image }}:tmp-${{ matrix.arch }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
@@ -110,9 +114,10 @@ jobs:
       - name: Merge manifests into multi-arch image
         run: |
           docker buildx imagetools create \
-            -t ${{ env.IMAGE }}:latest \
-            -t ${{ env.IMAGE }}:${{ needs.create-tag.outputs.tag }} \
-            ${{ needs.create-tag.outputs.tag }}:tmp-amd64 ${{ needs.create-tag.outputs.tag }}:tmp-arm64
+            -t ${{ needs.create-tag.outputs.image }}:latest \
+            -t ${{ needs.create-tag.outputs.image }}:${{ needs.create-tag.outputs.tag }} \
+            ${{ needs.create-tag.outputs.image }}:tmp-amd64 \
+            ${{ needs.create-tag.outputs.image }}:tmp-arm64
       - name: Generate artifact attestation
         uses: actions/attest@v4
         with:
