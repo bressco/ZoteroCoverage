@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: release-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.new_tag }}
-      image: ${{ steps.tag.outputs.image }}
+      image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v7
       - name: Get current date
