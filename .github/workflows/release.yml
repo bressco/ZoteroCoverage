@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: release-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -124,7 +124,7 @@ jobs:
       - name: Generate artifact attestation
         uses: actions/attest@v4
         with:
-          subject-name: ${{ env.IMAGE }}
+          subject-name: ${{ needs.create-tag.outputs.image }}
           subject-digest: ${{ env.DIGEST }}
           push-to-registry: true
 
