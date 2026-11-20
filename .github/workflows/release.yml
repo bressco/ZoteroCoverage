@@ -118,11 +118,14 @@ jobs:
             -t ${{ needs.create-tag.outputs.image }}:${{ needs.create-tag.outputs.tag }} \
             ${{ needs.create-tag.outputs.image }}:tmp-amd64 \
             ${{ needs.create-tag.outputs.image }}:tmp-arm64
+      - name: Get digest
+        id: digest
+        run: echo "DIGEST=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' ${{ needs.create-tag.outputs.image }}:latest)" >> $GITHUB_ENV
       - name: Generate artifact attestation
         uses: actions/attest@v4
         with:
           subject-name: ${{ env.IMAGE }}
-          subject-digest: $(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' ${{ env.IMAGE }}:latest)
+          subject-digest: ${{ env.DIGEST }}
           push-to-registry: true
 
   release:
