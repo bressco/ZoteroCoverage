@@ -4,17 +4,19 @@ use clap_file::Input;
 use pandoc_ast::{Block, Caption, Inline, MetaValue, Pandoc, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fmt;
+use std::{env, fmt};
 use std::fs;
-use std::io::Read;
+use std::fs::OpenOptions;
+use std::io::{Read, Write};
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
 #[value(rename_all = "lower")]
 enum OutputFormat {
     Json,
     Text,
-    /// Pull request comment (Markdown with detection marker `<!-- zoterocoverage -->`)
     Pr,
+    Gha
 }
 
 #[derive(Parser, Debug)]
@@ -80,6 +82,19 @@ fn format_pr_comment(report: &Report) -> String {
     out
 }
 
+fn format_gha(report: &Report) -> String {
+    let timestamp =
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+    let mut out = format!("report<<ZC_REPORT_EOF_{}\n", timestamp);
+    out.push_str(format_pr_comment(report).as_str());
+    out.push_str(format!("ZC_REPORT_EOF_{}", timestamp).as_str());
+
+    out
+}
+
 fn format_output(report: &Report, format: &OutputFormat) -> anyhow::Result<String> {
     match format {
         OutputFormat::Json => Ok(serde_json::to_string_pretty(report)?),
@@ -95,6 +110,7 @@ fn format_output(report: &Report, format: &OutputFormat) -> anyhow::Result<Strin
             }
         }
         OutputFormat::Pr => Ok(format_pr_comment(report)),
+        OutputFormat::Gha => Ok(format_gha(report))
     }
 }
 
@@ -359,7 +375,30 @@ fn main() {
         }
     };
 
-    println!("{output}");
+    match output_format {
+        OutputFormat::Gha => {
+            if let Ok(path) = env::var("GITHUB_OUTPUT") {
+                let mut f = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(path)
+                    .unwrap();
+                f.write_all(output.as_bytes()).unwrap();
+            }
+            if let Ok(path) = env::var("GITHUB_STEP_SUMMARY") {
+                let mut f = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(path)
+                    .unwrap();
+                f.write_all(
+                    format_pr_comment(&report).as_bytes()
+                ).unwrap();
+            }
+        }
+        _ => println!("{output}")
+    }
+
     if !report.all_cited {
         // Fail on command line
         std::process::exit(1);
