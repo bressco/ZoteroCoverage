@@ -4,9 +4,10 @@ use clap_file::Input;
 use pandoc_ast::{Block, Caption, Inline, MetaValue, Pandoc, Row};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fmt;
+use std::{env, fmt};
 use std::fs;
-use std::io::Read;
+use std::fs::OpenOptions;
+use std::io::{Read, Write};
 use std::time::SystemTime;
 
 #[derive(Debug, Clone, Copy, PartialEq, ValueEnum)]
@@ -376,7 +377,24 @@ fn main() {
 
     match output_format {
         OutputFormat::Gha => {
-            //TODO: Write report to GH Output
+            if let Ok(path) = env::var("GITHUB_OUTPUT") {
+                let mut f = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(path)
+                    .unwrap();
+                f.write_all(output.as_bytes()).unwrap();
+            }
+            if let Ok(path) = env::var("GITHUB_STEP_SUMMARY") {
+                let mut f = OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open(path)
+                    .unwrap();
+                f.write_all(
+                    format_pr_comment(&report).as_bytes()
+                ).unwrap();
+            }
         }
         _ => println!("{output}")
     }
