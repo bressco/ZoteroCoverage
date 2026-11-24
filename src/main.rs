@@ -88,7 +88,7 @@ fn format_gha(report: &Report) -> String {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-    let mut out = format!("report<<ZC_REPORT_EOF_{}", timestamp);
+    let mut out = format!("report<<ZC_REPORT_EOF_{}\n", timestamp);
     out.push_str(format_pr_comment(report).as_str());
     out.push_str(format!("ZC_REPORT_EOF_{}", timestamp).as_str());
 
