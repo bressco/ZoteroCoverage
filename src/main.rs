@@ -385,16 +385,17 @@ fn main() {
                     .unwrap();
                 f.write_all(output.as_bytes()).unwrap();
             }
-            if let Ok(path) = env::var("GITHUB_STEP_SUMMARY") {
-                let mut f = OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open(path)
-                    .unwrap();
-                f.write_all(
-                    format_pr_comment(&report).as_bytes()
-                ).unwrap();
-            }
+            //if let Ok(path) = env::var("GITHUB_STEP_SUMMARY") {
+            //    let mut f = OpenOptions::new()
+            //        .append(true)
+            //        .create(true)
+            //        .open(path)
+            //        .unwrap();
+            //    f.write_all(
+            //        format_pr_comment(&report).as_bytes()
+            //    ).unwrap();
+            //}
+            println!("{}", format_pr_comment(&report));
         }
         _ => println!("{output}")
     }
