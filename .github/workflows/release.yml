@@ -37,7 +37,7 @@ jobs:
         run: echo "STUB=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Push version tag
         id: tag
-        uses: mathieudutour/github-tag-action@v6.2
+        uses: mathieudutour/github-tag-action@v7
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           custom_tag: "${{ env.DATE }}-${{ env.STUB }}"
